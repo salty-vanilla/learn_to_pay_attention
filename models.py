@@ -88,7 +88,8 @@ class PaperVGG:
                 vs.reuse_variables()
             conv_params = {'is_training': is_training,
                            'activation_': 'relu',
-                           'normalization': 'batch'}
+                           'normalization': 'batch',
+                           'dropout_rate': 0.5}
             x = conv_block(x, 64, **conv_params)
             x = conv_block(x, 64, **conv_params)
 
@@ -97,21 +98,21 @@ class PaperVGG:
 
             x = conv_block(x, 256, **conv_params)
             x = conv_block(x, 256, **conv_params)
-            x = conv_block(x, 256, **conv_params, sampling='down')
+            x = conv_block(x, 256, **conv_params, sampling='pool')
             l1 = x
 
             x = conv_block(x, 512, **conv_params)
             x = conv_block(x, 512, **conv_params)
-            x = conv_block(x, 512, **conv_params, sampling='down')
+            x = conv_block(x, 512, **conv_params, sampling='pool')
             l2 = x
 
             x = conv_block(x, 512, **conv_params)
             x = conv_block(x, 512, **conv_params)
-            x = conv_block(x, 512, **conv_params, sampling='down')
+            x = conv_block(x, 512, **conv_params, sampling='pool')
             l3 = x
 
-            x = conv_block(x, 512, **conv_params, sampling='down')
-            x = conv_block(x, 512, **conv_params, sampling='down')
+            x = conv_block(x, 512, **conv_params, sampling='pool')
+            x = conv_block(x, 512, **conv_params, sampling='pool')
 
             x = flatten(x)
             g = dense(x, 512, activation_='relu')

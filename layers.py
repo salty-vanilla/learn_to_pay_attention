@@ -218,6 +218,13 @@ def average_pool2d(x,
     return kl.AveragePooling2D(kernel_size, strides, padding)(x)
 
 
+def max_pool2d(x,
+               kernel_size=(2, 2),
+               strides=(2, 2),
+               padding='same'):
+    return kl.MaxPool2D(kernel_size, strides, padding)(x)
+
+
 def batch_norm(x, is_training=True):
     return tl.batch_norm(x,
                          scale=True,

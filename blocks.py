@@ -11,7 +11,7 @@ def conv_block(x,
                dropout_rate=0.0,
                mode='conv_first'):
     assert mode in ['conv_first', 'normalization_first']
-    assert sampling in ['deconv', 'subpixel', 'down', 'same']
+    assert sampling in ['deconv', 'subpixel', 'stride', 'same', 'pool']
     assert normalization in ['batch', 'layer', None]
 
     conv_func = conv2d_transpose if sampling == 'deconv' \
@@ -50,6 +50,8 @@ def conv_block(x,
                            kernel_size=kernel_size,
                            activation_=None,
                            strides=strides)
+        if sampling == 'pool':
+            _x = max_pool2d(x)
         return _x
 
 
