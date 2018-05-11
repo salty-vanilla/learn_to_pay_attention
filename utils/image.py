@@ -19,4 +19,4 @@ def mpl_to_np(fig):
 def mpl_to_pil(fig):
     buf = mpl_to_np(fig)
     w, h, d = buf.shape
-    return Image.fromstring('RGBA', (w, h), buf.tostring())
+    return Image.frombytes('RGBA', (w, h), buf.tostring())

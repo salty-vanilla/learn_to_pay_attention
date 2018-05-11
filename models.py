@@ -1,20 +1,21 @@
 import tensorflow as tf
-from layers import dense, flatten
+from layers import dense, flatten, reshape
 from blocks import conv_block
 import os
 import time
 import numpy as np
-import scipy
+import scipy.ndimage
 import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
 from utils.image import mpl_to_pil
+from image_sampler import ImageSampler
 
 
 class PaperVGG:
     def __init__(self, image_shape,
                  nb_classes,
-                 learning_rate=1e-4,
+                 learning_rate=1e-3,
                  logdir=None):
         self.image_shape = image_shape
         self.image = tf.placeholder(tf.float32,
@@ -25,7 +26,8 @@ class PaperVGG:
 
         self.y_train, _ = self.__call__(self.image)
         self.y_val, self.attentions = self.__call__(self.image,
-                                                    is_training=False)
+                                                    is_training=False,
+                                                    reuse=True)
 
         self.attention_shapes = [a.get_shape().as_list()[1:] for a in self.attentions]
 
@@ -59,9 +61,7 @@ class PaperVGG:
                     tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
         with tf.variable_scope('optimizer'):
-            self.opt = tf.train.AdamOptimizer(learning_rate=learning_rate,
-                                              beta1=0.5,
-                                              beta2=0.99) \
+            self.opt = tf.train.AdamOptimizer(learning_rate=learning_rate) \
                 .minimize(self.loss_train)
         self.saver = tf.train.Saver()
         self.sess = tf.Session()
@@ -80,43 +80,70 @@ class PaperVGG:
 
     def __call__(self, x,
                  is_training=True,
+                 reuse=False,
                  *args,
                  **kwargs):
-        conv_params = {'is_training': is_training,
-                       'activation_': 'relu'}
-        x = conv_block(x, 64, **conv_params)
-        x = conv_block(x, 64, **conv_params)
+        with tf.variable_scope(self.__class__.__name__) as vs:
+            if reuse:
+                vs.reuse_variables()
+            conv_params = {'is_training': is_training,
+                           'activation_': 'relu',
+                           'normalization': 'batch'}
+            x = conv_block(x, 64, **conv_params)
+            x = conv_block(x, 64, **conv_params)
 
-        x = conv_block(x, 128, **conv_params)
-        x = conv_block(x, 128, **conv_params)
+            x = conv_block(x, 128, **conv_params)
+            x = conv_block(x, 128, **conv_params)
 
-        x = conv_block(x, 256, **conv_params)
-        x = conv_block(x, 256, **conv_params)
-        x = conv_block(x, 256, **conv_params, sampling='down')
-        l1 = x
+            x = conv_block(x, 256, **conv_params)
+            x = conv_block(x, 256, **conv_params)
+            x = conv_block(x, 256, **conv_params, sampling='down')
+            l1 = x
 
-        x = conv_block(x, 512, **conv_params)
-        x = conv_block(x, 512, **conv_params)
-        x = conv_block(x, 512, **conv_params, sampling='down')
-        l2 = x
+            x = conv_block(x, 512, **conv_params)
+            x = conv_block(x, 512, **conv_params)
+            x = conv_block(x, 512, **conv_params, sampling='down')
+            l2 = x
 
-        x = conv_block(x, 512, **conv_params)
-        x = conv_block(x, 512, **conv_params)
-        x = conv_block(x, 512, **conv_params, sampling='down')
-        l3 = x
+            x = conv_block(x, 512, **conv_params)
+            x = conv_block(x, 512, **conv_params)
+            x = conv_block(x, 512, **conv_params, sampling='down')
+            l3 = x
 
-        x = conv_block(x, 512, **conv_params, sampling='down')
-        x = conv_block(x, 512, **conv_params, sampling='down')
+            x = conv_block(x, 512, **conv_params, sampling='down')
+            x = conv_block(x, 512, **conv_params, sampling='down')
 
-        x = flatten(x)
-        g = dense(x, 512, activation_='relu')
+            x = flatten(x)
+            g = dense(x, 512, activation_='relu')
 
-        x, attentions = attention_module([l1, l2, l3], g)
-        return x, attentions
+            x, attentions = attention_module([l1, l2, l3], g)
+            x = dense(x, self.nb_classes)
+            return x, attentions
 
-    def fit(self):
-        # TODO generator使わないfit実装する
-        raise NotImplementedError
+    def fit(self, x,
+            y,
+            val_x=None,
+            val_y=None,
+            batch_size=16,
+            nb_epoch=100,
+            validation_steps=10,
+            save_steps=10,
+            model_dir='./models'):
+        image_sampler = ImageSampler(None,
+                                     normalize_mode=None).flow(x, y, batch_size)
+        if val_x is not None and val_y is not None:
+            assert len(val_x) == len(val_y)
+            valid_sampler = ImageSampler(None,
+                                         normalize_mode=None,
+                                         is_training=False).flow(x, y, batch_size, shuffle=False)
+        else:
+            valid_sampler = None
+        self.fit_generator(image_sampler,
+                           valid_sampler,
+                           nb_epoch=nb_epoch,
+                           validation_steps=validation_steps,
+                           save_steps=save_steps,
+                           model_dir=model_dir)
 
     def fit_generator(self, image_sampler,
                       valid_sampler=None,
@@ -139,14 +166,15 @@ class PaperVGG:
             print('\nepoch {} / {}'.format(epoch, nb_epoch))
             start = time.time()
             for iter_ in range(1, steps_per_epoch + 1):
-                image_batch = image_sampler()
+                image_batch, label_batch = image_sampler()
                 _, loss_train, acc_train, summary_loss_train, summary_acc_train =\
                     self.sess.run([self.opt,
                                    self.loss_train,
                                    self.acc_train,
                                    self.summary_loss_train,
                                    self.summary_acc_train],
-                                  feed_dict={self.image: image_batch})
+                                  feed_dict={self.image: image_batch,
+                                             self.label: label_batch})
                 print('iter : {} / {}  {:.1f}[s]  loss : {:.4f}  acc : {:.4f}  \r'
                       .format(iter_,
                               steps_per_epoch,
@@ -154,13 +182,13 @@ class PaperVGG:
                               loss_train,
                               acc_train),
                       end='')
-                self.tb_writer.add_summary(self.summary_loss_train, global_step)
-                self.tb_writer.add_summary(self.summary_acc_train, global_step)
+                self.tb_writer.add_summary(summary_loss_train, global_step)
+                self.tb_writer.add_summary(summary_acc_train, global_step)
                 self.tb_writer.flush()
                 global_step += 1
 
             if epoch % validation_steps == 0 and valid_sampler is not None:
-                loss_val, acc_val, attentions = self.evaluate_generator(valid_sampler)
+                loss_val, acc_val, _ = self.evaluate_generator(valid_sampler)
                 self.tb_writer.add_summary(
                     tf.Summary(value=[
                         tf.Summary.Value(tag='summary/validation/loss',
@@ -172,11 +200,16 @@ class PaperVGG:
                                          simple_value=acc_val)]),
                     global_step)
 
-                # TODO tensorboardにAttentionのImageを表示させる
-                # self.tb_writer.add_summary(tf.summary.image('summary/validation/attention',
-                #                                             attentions))
+                x, y = valid_sampler.random_sampling(4)
+                res = self.evaluate_on_batch(x, y)
+                atts = res[-1]
+                figs = np.array([visualize(ims[0], ims[1:]) for ims in zip(x, *atts)])
+                summary = self.sess.run(tf.summary.image('epoch_%d' % epoch,
+                                                         figs,
+                                                         nb_sample))
+                self.tb_writer.add_summary(summary, global_step)
 
-            if epoch & save_steps:
+            if epoch % save_steps == 0:
                 self.save(model_dir, epoch)
 
     def save(self, model_dir, epoch):
@@ -200,6 +233,7 @@ class PaperVGG:
         return pred, attentions
 
     def evaluate(self, x, y, batch_size=16):
+        loss = np.empty([0, 1])
         acc = np.empty([0, 1])
         attentions = [np.empty([0, *shape])
                       for shape in self.attention_shapes]
@@ -208,10 +242,12 @@ class PaperVGG:
         for iter_ in range(steps_per_epoch):
             x_batch = x[iter_ * batch_size: (iter_ + 1) * batch_size]
             y_batch = y[iter_ * batch_size: (iter_ + 1) * batch_size]
-            o, att = self.evaluate_on_batch(x_batch, y_batch)
-            acc = np.append(acc, o*len(x_batch), axis=0)
+            l, a, att = self.evaluate_on_batch(x_batch, y_batch)
+            loss = np.append(loss, l * len(x_batch), axis=0)
+            acc = np.append(acc, a * len(x_batch), axis=0)
             for i in range(len(attentions)):
                 attentions[i] = np.append(attentions[i], att[i], axis=0)
+        loss /= len(x)
         acc /= len(x)
         return acc, attentions
 
@@ -249,11 +285,12 @@ class PaperVGG:
             steps_per_epoch += 1
         for x_batch, y_batch in image_sampler():
             l, a, att = self.evaluate_on_batch(x_batch, y_batch)
-            loss = np.append(loss, l*len(x_batch), axis=0)
-            acc = np.append(acc, a*len(x_batch), axis=0)
+            loss = np.append(loss, l*len(x_batch))
+            acc = np.append(acc, a*len(x_batch))
             for i in range(len(attentions)):
                 attentions[i] = np.append(attentions[i], att[i], axis=0)
-        acc /= len(nb_sample)
+        loss = sum(loss) / nb_sample
+        acc = sum(acc) / nb_sample
         return loss, acc, attentions
 
     def predict_on_batch(self, x):
@@ -264,13 +301,17 @@ class PaperVGG:
         return pred, attentions
 
     def evaluate_on_batch(self, x, y):
-        return self.sess.run([self.loss_val, self.acc_val, *self.attentions],
-                             feed_dict={self.image: x,
-                                        self.label: y})
+        att = self.sess.run(self.attentions,
+                            feed_dict={self.image: x,
+                                       self.label: y})
+        loss, acc = self.sess.run([self.loss_val, self.acc_val],
+                                  feed_dict={self.image: x,
+                                             self.label: y})
+        return loss, acc, att
 
 
 def visualize(x, attentions, dst_path=None):
-    fig = plt.figure()
+    fig = plt.figure(figsize=(2*(len(attentions)+1), 2))
     plt.subplot(1, len(attentions)+1, 1)
     plt.imshow(x, vmin=0., vmax=1.)
     plt.xticks([])
@@ -286,11 +327,12 @@ def visualize(x, attentions, dst_path=None):
         plt.xticks([])
         plt.yticks([])
         plt.title('attention_%d' % i)
-
+    fig.tight_layout()
     if dst_path is not None:
         plt.savefig(dst_path)
 
     image = mpl_to_pil(fig)
+    image = np.asarray(image.convert('RGB'))
     plt.close()
     plt.clf()
     return image
@@ -298,6 +340,8 @@ def visualize(x, attentions, dst_path=None):
 
 def attention_estimator(x, g):
     with tf.variable_scope(None, 'attention_estimator'):
+        x_shape = x.get_shape().as_list()
+        x = reshape(x, (x_shape[1]*x_shape[2], x_shape[3]))
         x_dim = x.get_shape().as_list()[-1]
         g_dim = g.get_shape().as_list()[-1]
 
@@ -305,21 +349,25 @@ def attention_estimator(x, g):
             w = tf.get_variable('w',
                                 (x_dim, g_dim),
                                 initializer=tf.truncated_normal_initializer(stddev=0.02))
-            x = tf.matmul(x, w)
+            x = tf.tensordot(x, w, axes=1)
 
         c = tf.squeeze(tf.matmul(x, tf.expand_dims(g, -1)), -1)
         a = tf.nn.softmax(c)
         g_out = x * tf.expand_dims(a, -1)
-        g_out = tf.reduce_sum(g_out, -1)
-        return g_out, a
+        g_out = tf.reduce_sum(g_out, 1)
+        return g_out, tf.reshape(a, (-1, x_shape[1], x_shape[2]))
 
 
 def attention_module(ls, g):
     gs = []
     as_ = []
     for l in ls:
-        g, a = attention_estimator(l, g)
-        gs.append(g)
+        _g, a = attention_estimator(l, g)
+        gs.append(_g)
         as_.append(a)
     g = tf.concat(gs, axis=-1)
     return g, as_
+
+
+if __name__ == '__main__':
+    model = PaperVGG((224, 224, 3), 10, logdir='../temp')
