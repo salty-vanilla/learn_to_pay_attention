@@ -207,8 +207,8 @@ class ArrayIterator(Iterator):
 
     def flow_on_training(self):
         with self.lock:
-            index_array, current_index, current_batch_size = next(self.index_generator)
-        image_batch = np.array([preprocessing(Image.fromarray(x),
+            index_array = next(self.index_generator)
+        image_batch = np.array([preprocessing(x,
                                               color_mode=self.color_mode,
                                               target_size=self.target_size,
                                               normalize_mode=self.normalize_mode)
@@ -230,7 +230,7 @@ class ArrayIterator(Iterator):
             steps += 1
         for i in range(steps):
             index_array = indexes[i * self.batch_size: (i + 1) * self.batch_size]
-            image_batch = np.array([preprocessing(Image.fromarray(x),
+            image_batch = np.array([preprocessing(x,
                                                   color_mode=self.color_mode,
                                                   target_size=self.target_size,
                                                   normalize_mode=self.normalize_mode)
@@ -240,6 +240,25 @@ class ArrayIterator(Iterator):
                 yield image_batch, label_batch
             else:
                 yield image_batch
+
+    def random_sampling(self, batch_size=16, seed=None):
+        indexes = np.arange(self.nb_sample)
+        if seed is not None:
+            np.random.seed(seed=seed)
+        np.random.shuffle(indexes)
+
+        index_array = indexes[:batch_size]
+
+        image_batch = np.array([preprocessing(x,
+                                              color_mode=self.color_mode,
+                                              target_size=self.target_size,
+                                              normalize_mode=self.normalize_mode)
+                                for x in self.x[index_array]])
+        if self.y is not None:
+            label_batch = self.y[index_array]
+            return image_batch, label_batch
+        else:
+            return image_batch
 
     def data_to_image(self, x):
         return denormalize(x, self.normalize_mode)
@@ -274,6 +293,8 @@ def normalize(x, mode='tanh'):
         return (x.astype('float32') / 255 - 0.5) / 0.5
     elif mode == 'sigmoid':
         return x.astype('float32') / 255
+    elif mode is None:
+        return x
     else:
         raise NotImplementedError
 

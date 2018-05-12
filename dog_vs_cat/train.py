@@ -1,6 +1,9 @@
 import argparse
+import os
+import sys
+sys.path.append(os.getcwd())
+from dog_vs_cat.model import CifarCNN
 from image_sampler import ImageSampler
-from models import PaperVGG
 
 
 def main():
@@ -27,7 +30,7 @@ def main():
                                normalize_mode='sigmoid',
                                is_training=False)
 
-    model = PaperVGG((args.width, args.height, 3),
+    model = CifarCNN((args.width, args.height, 3),
                      nb_classes=args.nb_classes,
                      logdir=args.logdir)
 

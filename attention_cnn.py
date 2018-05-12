@@ -12,7 +12,7 @@ from utils.image import mpl_to_pil
 from image_sampler import ImageSampler
 
 
-class PaperVGG:
+class AttentionCNN:
     def __init__(self, image_shape,
                  nb_classes,
                  learning_rate=1e-3,
@@ -83,43 +83,7 @@ class PaperVGG:
                  reuse=False,
                  *args,
                  **kwargs):
-        with tf.variable_scope(self.__class__.__name__) as vs:
-            if reuse:
-                vs.reuse_variables()
-            conv_params = {'is_training': is_training,
-                           'activation_': 'relu',
-                           'normalization': 'batch',
-                           'dropout_rate': 0.5}
-            x = conv_block(x, 64, **conv_params)
-            x = conv_block(x, 64, **conv_params)
-
-            x = conv_block(x, 128, **conv_params)
-            x = conv_block(x, 128, **conv_params)
-
-            x = conv_block(x, 256, **conv_params)
-            x = conv_block(x, 256, **conv_params)
-            x = conv_block(x, 256, **conv_params, sampling='pool')
-            l1 = x
-
-            x = conv_block(x, 512, **conv_params)
-            x = conv_block(x, 512, **conv_params)
-            x = conv_block(x, 512, **conv_params, sampling='pool')
-            l2 = x
-
-            x = conv_block(x, 512, **conv_params)
-            x = conv_block(x, 512, **conv_params)
-            x = conv_block(x, 512, **conv_params, sampling='pool')
-            l3 = x
-
-            x = conv_block(x, 512, **conv_params, sampling='pool')
-            x = conv_block(x, 512, **conv_params, sampling='pool')
-
-            x = flatten(x)
-            g = dense(x, 512, activation_='relu')
-
-            x, attentions = attention_module([l1, l2, l3], g)
-            x = dense(x, self.nb_classes)
-            return x, attentions
+        raise NotImplementedError
 
     def fit(self, x,
             y,
