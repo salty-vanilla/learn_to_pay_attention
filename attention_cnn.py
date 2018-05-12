@@ -1,6 +1,5 @@
 import tensorflow as tf
-from layers import dense, flatten, reshape
-from blocks import conv_block
+from layers import dense, flatten
 import os
 import time
 import numpy as np
@@ -305,22 +304,27 @@ def visualize(x, attentions, dst_path=None):
 
 def attention_estimator(x, g):
     with tf.variable_scope(None, 'attention_estimator'):
-        x_shape = x.get_shape().as_list()
-        x = reshape(x, (x_shape[1]*x_shape[2], x_shape[3]))
-        x_dim = x.get_shape().as_list()[-1]
+        _, height, width, x_dim = x.get_shape().as_list()
         g_dim = g.get_shape().as_list()[-1]
 
         if not x_dim == g_dim:
-            w = tf.get_variable('w',
-                                (x_dim, g_dim),
-                                initializer=tf.truncated_normal_initializer(stddev=0.02))
-            x = tf.tensordot(x, w, axes=1)
+            x = dense(x, g_dim, use_bias=False)
 
-        c = tf.squeeze(tf.matmul(x, tf.expand_dims(g, -1)), -1)
-        a = tf.nn.softmax(c)
+        # c = tf.squeeze(tf.matmul(x,
+        #                          tf.expand_dims(g, -1)),
+        #                axis=-1)
+
+        # c = tf.squeeze(tf.matmul(x,
+        #                          tf.expand_dims(tf.expand_dims(g, -1), -1)),
+        #                axis=[-1, -2])
+
+        # c = tf.map_fn(lambda _x: tf.matmul(_x[0], _x[1]), elems=[x, tf.expand_dims(tf.expand_dims(g, -1), -1)])
+        c = tf.reduce_sum(x * tf.expand_dims(tf.expand_dims(g, 1), 1), axis=-1)
+        a = tf.nn.softmax(flatten(c))
+        a = tf.reshape(a, (-1, height, width))
         g_out = x * tf.expand_dims(a, -1)
-        g_out = tf.reduce_sum(g_out, 1)
-        return g_out, tf.reshape(a, (-1, x_shape[1], x_shape[2]))
+        g_out = tf.reduce_sum(g_out, axis=[1, 2])
+        return g_out, a
 
 
 def attention_module(ls, g):

@@ -4,8 +4,19 @@ from tensorflow.contrib import layers as tl
 import numpy as np
 
 
-def dense(x, units, activation_=None):
-    return activation(kl.Dense(units, activation=None)(x),
+def dense(x,
+          units,
+          activation_=None,
+          use_bias=True,
+          kernel_initializer='glorot_uniform',
+          bias_initializer='zeros',
+          **kwargs):
+    return activation(kl.Dense(units,
+                               activation=None,
+                               use_bias=use_bias,
+                               kernel_initializer=kernel_initializer,
+                               bias_initializer=bias_initializer,
+                               **kwargs)(x),
                       activation_)
 
 
