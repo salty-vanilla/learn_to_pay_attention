@@ -310,15 +310,6 @@ def attention_estimator(x, g):
         if not x_dim == g_dim:
             x = dense(x, g_dim, use_bias=False)
 
-        # c = tf.squeeze(tf.matmul(x,
-        #                          tf.expand_dims(g, -1)),
-        #                axis=-1)
-
-        # c = tf.squeeze(tf.matmul(x,
-        #                          tf.expand_dims(tf.expand_dims(g, -1), -1)),
-        #                axis=[-1, -2])
-
-        # c = tf.map_fn(lambda _x: tf.matmul(_x[0], _x[1]), elems=[x, tf.expand_dims(tf.expand_dims(g, -1), -1)])
         c = tf.reduce_sum(x * tf.expand_dims(tf.expand_dims(g, 1), 1), axis=-1)
         a = tf.nn.softmax(flatten(c))
         a = tf.reshape(a, (-1, height, width))
@@ -336,7 +327,3 @@ def attention_module(ls, g):
         as_.append(a)
     g = tf.concat(gs, axis=-1)
     return g, as_
-
-
-if __name__ == '__main__':
-    model = PaperVGG((224, 224, 3), 10, logdir='../temp')
