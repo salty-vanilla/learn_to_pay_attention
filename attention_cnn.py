@@ -181,6 +181,9 @@ class AttentionCNN:
         if not os.path.exists(dst_dir):
             os.makedirs(dst_dir)
         return self.saver.save(self.sess, save_path=os.path.join(dst_dir, 'model.ckpt'))
+    
+    def restore(self, model_path):
+        return self.saver.restore(self.sess, model_path)
 
     def predict(self, x, batch_size=16):
         pred = np.empty([0, 1])
@@ -274,7 +277,7 @@ class AttentionCNN:
         return loss, acc, att
 
 
-def visualize(x, attentions, dst_path=None):
+def visualize(x, attentions, dst_path=None, vmin=0., vmax=1.):
     fig = plt.figure(figsize=(2*(len(attentions)+1), 2))
     plt.subplot(1, len(attentions)+1, 1)
     plt.imshow(x, vmin=0., vmax=1.)
@@ -287,7 +290,7 @@ def visualize(x, attentions, dst_path=None):
         att_h, att_w = att.shape[:2]
         att = scipy.ndimage.zoom(att, (x_w/att_w, x_h/att_h), order=1)
         plt.imshow(x, vmin=0., vmax=1.)
-        plt.imshow(att, vmin=0., vmax=1., cmap='jet', alpha=0.5)
+        plt.imshow(att, vmin=vmin, vmax=vmax, cmap='jet', alpha=0.5)
         plt.xticks([])
         plt.yticks([])
         plt.title('attention_%d' % i)

@@ -1,7 +1,7 @@
 import tensorflow as tf
 from attention_cnn import AttentionCNN, attention_module
 from blocks import conv_block
-from layers import flatten, dense
+from layers import flatten, dense, max_pool2d
 
 
 class CifarCNN(AttentionCNN):
@@ -24,18 +24,21 @@ class CifarCNN(AttentionCNN):
 
             x = conv_block(x, 256, **conv_params, dropout_rate=0.4)
             x = conv_block(x, 256, **conv_params, dropout_rate=0.4)
-            x = conv_block(x, 256, **conv_params, sampling='pool')
+            x = conv_block(x, 256, **conv_params)
             l1 = x
+            x = max_pool2d(x)
 
             x = conv_block(x, 512, **conv_params, dropout_rate=0.4)
             x = conv_block(x, 512, **conv_params, dropout_rate=0.4)
-            x = conv_block(x, 512, **conv_params, sampling='pool')
+            x = conv_block(x, 512, **conv_params)
             l2 = x
+            x = max_pool2d(x)
 
             x = conv_block(x, 512, **conv_params, dropout_rate=0.4)
             x = conv_block(x, 512, **conv_params, dropout_rate=0.4)
-            x = conv_block(x, 512, **conv_params, sampling='pool')
+            x = conv_block(x, 512, **conv_params)
             l3 = x
+            x = max_pool2d(x)
 
             x = conv_block(x, 512, **conv_params, sampling='pool')
             x = conv_block(x, 512, **conv_params, sampling='pool')
